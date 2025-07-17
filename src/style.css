@@ -54,3 +54,8 @@ button,
 textarea {
   font-family: Arial, sans-serif;
 }
+
+#app {
+  height: 100vh;
+  overflow: hidden;
+}
