@@ -21,7 +21,8 @@ window.addEventListener("load", (event) => {
     };
 
     root.KeyDownMonitor = KeyDownMonitor;
-}(window));`);
+}(window));
+qwerty uiop asd fgjkjhliuwqeq nmnv zcgbviu mdsjkfn sdkfhs dfsndfs difus fshdfisduf sifs fnjsdnfsidfu sifs dnfjsndfsiduf sdfjsndf sidfhj sfnsdifhjsdifhsdihf`);
 });
 
 class App {
@@ -36,7 +37,7 @@ class App {
   options;
   defaultOptions = {
     fontSize: 16,
-    lineHeight: 20,
+    // lineHeight: 20, // TODO: maybe change value to be 1.25 of font size, ex: 16 * 1.25 = 20
     letterSpacing: 2,
     // padding: 10,
     // gutterWidth: 50,
@@ -54,7 +55,7 @@ class App {
   constructor(options) {
     console.log(">>> APP Options: ", options);
 
-    this.options = { ...this.defaultOptions, ...options };
+    this.options = { ...this.defaultOptions, ...options, lineHeight: (options?.fontSize ?? this.defaultOptions.fontSize) * 1.25 };
 
     this.element = document.querySelector("#app");
     this.elRect = this.element.getBoundingClientRect();
@@ -127,6 +128,19 @@ class App {
           }
           break;
         case "Tab": this.insertChar("  "); break; // TODO: shift + tab
+        // case "c":
+        //   if (e.ctrlKey) {
+        //     const selectedLine = lines[cursor.line];
+        //     navigator.clipboard.writeText(selectedLine);
+        //   }
+        //   break;
+        case "v":
+          if (e.ctrlKey) {
+            navigator.clipboard.readText().then(text => {
+              this.insertChar(text);
+            });
+          }
+          break;
         default:
           if (e.key.length < 2) {
             this.insertChar(e.key);
@@ -187,14 +201,22 @@ class App {
     this.ctx.textBaseline = "bottom";
     this.ctx.fillStyle = "#000000";
 
-    this.drawSelectedLine();
+    this.processedLines = [];
 
     let offset = 0;
 
     this.lines.forEach((line, i) => {
       offset = i === 0 ? this.options.lineHeight : offset + this.options.lineHeight;
 
+      const wrappedText = this.wrapText(line, offset);
+
+      this.processedLines.push(wrappedText);
+
       this.wrapText(line, offset)?.forEach((item) => {
+        if (i === this.cursor.line) {
+          this.drawSelectedLine(item[1] - this.options.lineHeight);
+        }
+
         this.ctx.fillText(item[0], 0, item[1]);
         offset = item[1];
       });
@@ -203,8 +225,8 @@ class App {
   }
 
   wrapText(ln, offset) {
-    let line = ''; // This will store the text of the current line
-    let testLine = ''; // This will store the text when we add a word, to test if it's too long
+    let line = ""; // This will store the text of the current line
+    let testLine = ""; // This will store the text when we add a word, to test if it's too long
     let lineArray = []; // This is an array of lines, which the function will return
 
     const words = [...this.segWords.segment(ln)].map((word, i) => {
@@ -214,25 +236,26 @@ class App {
       };
     });
 
-    // Lets iterate over each word
+    if (words.length === 0) {
+      return [[line, offset]];
+    }
+
     for (var n = 0; n < words.length; n++) {
-      // Create a test line, and measure it..
       testLine += words[n].value;
-      // If the width of this test line is more than the max width
+
       if (this.ctx.measureText(testLine).width > this.canvas.width && n > 0) {
-        // Then the line is finished, push the current line into "lineArray"
+        // Line is finished, push the current line into "lineArray"
         lineArray.push([line, offset]);
-        // Increase the line height, so a new line is started
+        // A new line has start so increase the offset
         offset += this.options.lineHeight;
-        // Update line and test line to use this word as the first word on the next line
+        // Next line first word update
         line = words[n].value;
         testLine = words[n].value;
       }
       else {
-        // If the test line is still less than the max width, then add the word to the current line
         line += words[n].value;
       }
-      // If we never reach the full max width, then there is only one line.. so push it into the lineArray so we return something
+      // Update lineArray if line width never reaches max width, meaning it's only one line
       if (n === words.length - 1) {
         lineArray.push([line, offset]);
       }
@@ -244,25 +267,53 @@ class App {
   drawCursor() {
     const { line, col } = this.cursor;
     const text = this.lines[line].slice(0, col);
-    const y = line * this.options.lineHeight;
-    const x = col === 0 ? 0 : this.ctx.measureText(text).width - this.options.letterSpacing;
+    let y = line * this.options.lineHeight;
+    let x = col === 0 ? 0 : this.ctx.measureText(text).width - this.options.letterSpacing;
 
+    // TODO: calculate cursor position
+    if (this.processedLines[line].length > 1) {
+      let testLine = "";
+      let tempCol = col;
+      let found = false;
+
+      this.processedLines[line].forEach((arr) => {
+        console.log(">>>> FDS:", arr, tempCol);
+        testLine += arr[0];
+        if (tempCol <= testLine.length && !found) {
+          y = arr[1] - this.options.lineHeight;
+          x = col === 0 ? 0 : this.ctx.measureText(testLine.slice(0, tempCol)).width - this.options.letterSpacing;
+          found = true;
+        } else {
+          console.log(">>>> PORRA: ", testLine.length);
+          tempCol -= testLine.length;
+          testLine = "";
+        }
+      });
+
+    }
+    console.log(">>> pw: ", this.processedLines[line], x, y);
+
+    this.ctx.save();
     this.ctx.fillStyle = "#000000";
     this.ctx.fillRect(x, y, 2, this.options.lineHeight);
+    this.ctx.restore();
   }
-
-  drawSelectedLine() {
+  drawSelectedLine(y) {
     this.ctx.save();
     this.ctx.globalAlpha = 0.5;
     this.ctx.fillStyle = "#cccccc";
-    this.ctx.fillRect(0, this.cursor.line * this.options.lineHeight, this.canvas.width, this.options.lineHeight);
+    this.ctx.fillRect(0, y, this.canvas.width, this.options.lineHeight);
     this.ctx.restore();
-
   }
 
   insertChar(ch) {
+    // TODO: for when we copy some multiline text, update original text and recalculate lines
     const line = this.lines[this.cursor.line];
     this.lines[this.cursor.line] = line.slice(0, this.cursor.col) + ch + line.slice(this.cursor.col);
+    // const newLines = [...this.segLines.segment(ch)]
+    // if (newLines.length > 1) {
+    //   this.lines = [...this.segLines.segment(this.lines.join("\n"))].map(l => l.segment.replaceAll("\n", ""));
+    // }
     this.cursor.col += ch.length;
   }
 }
