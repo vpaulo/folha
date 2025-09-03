@@ -1,5 +1,12 @@
+import "./style.css";
+import "./app.css";
+
+import { Greet } from "../wailsjs/go/main/App";
+import { ClipboardGetText, EventsOn, LogInfo } from "../wailsjs/runtime/runtime";
+
+// INFO: using event "loaded" not always triggers on app reload
 window.addEventListener("load", (event) => {
-  console.log(">> LOADED: ");
+  LogInfo(">> LOADED: ");
   const app = new App();
   app.load(`;(function(root) {
     'use strict';
@@ -25,10 +32,33 @@ window.addEventListener("load", (event) => {
 qwerty uiop asd fgjkjhliuwqeq nmnv zcgbviu mdsjkfn sdkfhs dfsndfs difus fshdfisduf sifs fnjsdnfsidfu sifs dnfjsndfsiduf sdfjsndf sidfhj sfnsdifhjsdifhsdihf`);
 });
 
+// Setup the greet function
+// window.greet = function () {
+//   // Get name
+//   let name = nameElement.value;
+
+//   // Check if the input is empty
+//   if (name === "") return;
+
+//   // Call App.Greet(name)
+//   try {
+//     Greet(name)
+//       .then((result) => {
+//         // Update result with data back from App.Greet()
+//         resultElement.innerText = result;
+//       })
+//       .catch((err) => {
+//         console.error(err);
+//       });
+//   } catch (err) {
+//     console.error(err);
+//   }
+// };
+
 class App {
   canvas;
   ctx;
-  dpi = window.devicePixelRatio || 1;// Change to 1 on retina screens to see blurry canvas.
+  dpi = window.devicePixelRatio || 1; // Change to 1 on retina screens to see blurry canvas.
 
   element;
   elRect;
@@ -43,9 +73,7 @@ class App {
     // gutterWidth: 50,
     // theme: 'dark',
   };
-  text = "";
   lines = [];
-  charWidth = 0;
   cursor = { line: 0, col: 0 };
 
   segLines = new Intl.Segmenter("en", { granularity: "sentence" });
@@ -53,15 +81,18 @@ class App {
   segChars = new Intl.Segmenter("en", { granularity: "grapheme" });
 
   constructor(options) {
-    console.log(">>> APP Options: ", options);
+    // console.log(">>> APP Options: ", options);
 
-    this.options = { ...this.defaultOptions, ...options, lineHeight: (options?.fontSize ?? this.defaultOptions.fontSize) * 1.25 };
+    this.options = {
+      ...this.defaultOptions,
+      ...options,
+      lineHeight: (options?.fontSize ?? this.defaultOptions.fontSize) * 1.25,
+    };
 
     this.element = document.querySelector("#app");
     this.elRect = this.element.getBoundingClientRect();
     this.canvas = document.querySelector("canvas");
     this.ctx = this.canvas.getContext("2d");
-    this.charWidth = this.ctx.measureText("M").width;
 
     window.addEventListener("keydown", (e) => {
       console.log(">>> keydown: ", e, this.lines.length);
@@ -85,13 +116,19 @@ class App {
         case "ArrowUp":
           if (this.cursor.line > 0) {
             this.cursor.line--;
-            this.cursor.col = this.lines[this.cursor.line].length < this.cursor.col ? this.lines[this.cursor.line].length : this.cursor.col;
+            this.cursor.col =
+              this.lines[this.cursor.line].length < this.cursor.col
+                ? this.lines[this.cursor.line].length
+                : this.cursor.col;
           }
           break;
         case "ArrowDown":
           if (this.lines.length - 1 > this.cursor.line) {
             this.cursor.line++;
-            this.cursor.col = this.lines[this.cursor.line].length < this.cursor.col ? this.lines[this.cursor.line].length : this.cursor.col;
+            this.cursor.col =
+              this.lines[this.cursor.line].length < this.cursor.col
+                ? this.lines[this.cursor.line].length
+                : this.cursor.col;
           }
           break;
         case "Backspace": // TODO ctrl + backspace to delete word
@@ -109,7 +146,9 @@ class App {
           break;
         case "Delete":
           if (this.lines[this.cursor.line].length > this.cursor.col) {
-            this.lines[this.cursor.line] = this.lines[this.cursor.line].slice(0, this.cursor.col) + this.lines[this.cursor.line].slice(this.cursor.col + 1);
+            this.lines[this.cursor.line] =
+              this.lines[this.cursor.line].slice(0, this.cursor.col) +
+              this.lines[this.cursor.line].slice(this.cursor.col + 1);
           } else if (this.lines[this.cursor.line + 1] !== undefined && this.lines[this.cursor.line + 1] !== null) {
             const next = this.lines[this.cursor.line + 1];
             this.lines.splice(this.cursor.line + 1, 1); // remove line
@@ -127,7 +166,9 @@ class App {
             this.cursor.col = 0;
           }
           break;
-        case "Tab": this.insertChar("  "); break; // TODO: shift + tab
+        case "Tab":
+          this.insertChar("  ");
+          break; // TODO: shift + tab
         // case "c":
         //   if (e.ctrlKey) {
         //     const selectedLine = lines[cursor.line];
@@ -136,8 +177,9 @@ class App {
         //   break;
         case "v":
           if (e.ctrlKey) {
-            navigator.clipboard.readText().then(text => {
+            ClipboardGetText().then((text) => {
               this.insertChar(text);
+              this.loop();
             });
           }
           break;
@@ -154,13 +196,12 @@ class App {
   }
 
   load(txt = "") {
-    this.lines = [...this.segLines.segment(txt)].map(l => l.segment.replaceAll("\n", ""));
+    this.lines = [...this.segLines.segment(txt)].map((l) => l.segment.replaceAll("\n", ""));
     if (this.lines.length === 0) {
       this.lines.push("");
     }
 
-    console.log(">>> APP Load: ", this.canvas, this.ctx, this.dpi, this.lines);
-
+    // console.log(">>> APP Load: ", this.canvas, this.ctx, this.dpi, this.lines);
 
     this.observer = new ResizeObserver(() => {
       this.elRect = this.element.getBoundingClientRect();
@@ -193,7 +234,7 @@ class App {
     this.render();
   }
 
-  update() { }
+  update() {}
   render() {
     this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     this.ctx.font = `${this.options.fontSize}px Arial`;
@@ -251,8 +292,7 @@ class App {
         // Next line first word update
         line = words[n].value;
         testLine = words[n].value;
-      }
-      else {
+      } else {
         line += words[n].value;
       }
       // Update lineArray if line width never reaches max width, meaning it's only one line
@@ -277,25 +317,24 @@ class App {
       let found = false;
 
       this.processedLines[line].forEach((arr) => {
-        console.log(">>>> FDS:", arr, tempCol);
+        // console.log(">>>> FDS:", arr, tempCol);
         testLine += arr[0];
         if (tempCol <= testLine.length && !found) {
           y = arr[1] - this.options.lineHeight;
           x = col === 0 ? 0 : this.ctx.measureText(testLine.slice(0, tempCol)).width - this.options.letterSpacing;
           found = true;
         } else {
-          console.log(">>>> PORRA: ", testLine.length);
+          // console.log(">>>> PORRA: ", testLine.length);
           tempCol -= testLine.length;
           testLine = "";
         }
       });
-
     }
-    console.log(">>> pw: ", this.processedLines[line], x, y);
+    // console.log(">>> pw: ", this.processedLines[line], x, y);
 
     this.ctx.save();
     this.ctx.fillStyle = "#000000";
-    this.ctx.fillRect(x, y, 2, this.options.lineHeight);
+    this.ctx.fillRect(x >> 0, y >> 0, 2, this.options.lineHeight);
     this.ctx.restore();
   }
   drawSelectedLine(y) {
@@ -307,13 +346,21 @@ class App {
   }
 
   insertChar(ch) {
-    // TODO: for when we copy some multiline text, update original text and recalculate lines
     const line = this.lines[this.cursor.line];
-    this.lines[this.cursor.line] = line.slice(0, this.cursor.col) + ch + line.slice(this.cursor.col);
-    // const newLines = [...this.segLines.segment(ch)]
-    // if (newLines.length > 1) {
-    //   this.lines = [...this.segLines.segment(this.lines.join("\n"))].map(l => l.segment.replaceAll("\n", ""));
-    // }
-    this.cursor.col += ch.length;
+    const before = line.slice(0, this.cursor.col);
+    const after = line.slice(this.cursor.col);
+    // Normalise inserted characters
+    const newLines = [...this.segLines.segment(ch)].map((l) => l.segment.replaceAll("\n", ""));
+
+    if (newLines.length > 1) {
+      const last = (newLines.at(-1) ?? "") + after;
+      newLines[newLines.length - 1] = last;
+      this.lines.splice(this.cursor.line, 0, ...newLines);
+      this.cursor.line += newLines.length - 1;
+      this.cursor.col = last.length - after.length;
+    } else {
+      this.lines[this.cursor.line] = before + ch + after;
+      this.cursor.col += ch.length;
+    }
   }
 }
