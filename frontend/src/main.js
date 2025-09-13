@@ -134,6 +134,7 @@ export class Editor {
   }
 
   render() {
+    // TODO: Only render necessary lines ??
     this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     this.ctx.font = `${this.options.fontSize}px Arial`;
     this.ctx.letterSpacing = `${this.options.letterSpacing}px`;
@@ -141,99 +142,19 @@ export class Editor {
     this.ctx.textBaseline = "bottom";
     this.ctx.fillStyle = "#000000";
 
-    this.processedLines = [];
-
-    let offset = 0;
-
+    this.drawSelectedLine(0);
     this.lines.forEach((line, i) => {
-      offset = i === 0 ? this.options.lineHeight : offset + this.options.lineHeight;
-
-      const wrappedText = this.wrapText(line, offset);
-
-      this.processedLines.push(wrappedText);
-
-      this.wrapText(line, offset)?.forEach((item) => {
-        if (i === this.cursor.line) {
-          this.drawSelectedLine(item[1] - this.options.lineHeight);
-        }
-
-        this.ctx.fillText(item[0], 0, item[1]);
-        offset = item[1];
-      });
+      this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
     });
     this.drawCursor();
   }
 
-  wrapText(ln, offset) {
-    let line = ""; // This will store the text of the current line
-    let testLine = ""; // This will store the text when we add a word, to test if it's too long
-    let lineArray = []; // This is an array of lines, which the function will return
-
-    const words = [...this.segWords.segment(ln)].map((word, i) => {
-      return {
-        value: word.segment,
-        width: this.ctx.measureText(word.segment).width,
-      };
-    });
-
-    if (words.length === 0) {
-      return [[line, offset]];
-    }
-
-    for (var n = 0; n < words.length; n++) {
-      testLine += words[n].value;
-
-      if (this.ctx.measureText(testLine).width > this.canvas.width && n > 0) {
-        // Line is finished, push the current line into "lineArray"
-        lineArray.push([line, offset]);
-        // A new line has start so increase the offset
-        offset += this.options.lineHeight;
-        // Next line first word update
-        line = words[n].value;
-        testLine = words[n].value;
-      } else {
-        line += words[n].value;
-      }
-      // Update lineArray if line width never reaches max width, meaning it's only one line
-      if (n === words.length - 1) {
-        lineArray.push([line, offset]);
-      }
-    }
-    // Return the line array
-    return lineArray;
-  }
-
   drawCursor() {
-    const { line, col, x: cx, y: cy } = this.cursor;
-    const text = this.lines[line].slice(0, col);
-    let y = cy; //line * this.options.lineHeight;
-    let x = col === 0 ? 0 : this.ctx.measureText(text).width - this.options.letterSpacing;
-
-    // TODO: calculate cursor position
-    if (this.processedLines[line].length > 1) {
-      let testLine = "";
-      let tempCol = col;
-      let found = false;
-
-      this.processedLines[line].forEach((arr) => {
-        // console.log(">>>> FDS:", arr, tempCol);
-        testLine += arr[0];
-        if (tempCol <= testLine.length && !found) {
-          // y = arr[1] - this.options.lineHeight;
-          x = col === 0 ? 0 : this.ctx.measureText(testLine.slice(0, tempCol)).width - this.options.letterSpacing;
-          found = true;
-        } else {
-          // console.log(">>>> PORRA: ", testLine.length);
-          tempCol -= testLine.length;
-          testLine = "";
-        }
-      });
-    }
-    console.log(">>> drawCursor: ", x >> 0, y >> 0);
-
+    const { width, height } = this.cursor;
+    const { x, y } = this.cursor.position();
     this.ctx.save();
     this.ctx.fillStyle = "#000000";
-    this.ctx.fillRect(x >> 0, y >> 0, 2, this.options.lineHeight);
+    this.ctx.fillRect(x, y, width, height);
     this.ctx.restore();
   }
 
