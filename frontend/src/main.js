@@ -73,13 +73,12 @@ export class Editor {
     fontSize: 16,
     // lineHeight: 20, // TODO: maybe change value to be 1.25 of font size, ex: 16 * 1.25 = 20
     letterSpacing: 2,
-    wordSpacing: 4,
+    // wordSpacing: 4,
     // padding: 10,
     // gutterWidth: 50,
     // theme: 'dark',
   };
   lines = [];
-  cursor = { line: 0, col: 0 };
 
   segLines = new Intl.Segmenter("en", { granularity: "sentence" });
   segWords = new Intl.Segmenter("en", { granularity: "word" });
@@ -122,6 +121,9 @@ export class Editor {
     // Scale the context to ensure correct drawing operations
     this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset any previous transform
     this.ctx.scale(this.dpi, this.dpi);
+
+    this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
+    this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
   }
 
   load(txt = "") {
@@ -129,21 +131,38 @@ export class Editor {
     if (this.lines.length === 0) {
       this.lines.push("");
     }
+    this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
+    this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
 
     this.render();
   }
 
   render() {
-    // TODO: Only render necessary lines ??
     this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    this.ctx.font = `${this.options.fontSize}px Arial`;
+    this.ctx.font = `${this.options.fontSize}px monospace`;
     this.ctx.letterSpacing = `${this.options.letterSpacing}px`;
-    this.ctx.wordSpacing = `${this.options.wordSpacing}px`;
+    // this.ctx.wordSpacing = `${this.options.wordSpacing}px`;
     this.ctx.textBaseline = "bottom";
     this.ctx.fillStyle = "#000000";
 
-    this.drawSelectedLine(0);
-    this.lines.forEach((line, i) => {
+    if (this.visibleLines.from > this.cursor.line) {
+      this.visibleLines.from = this.cursor.line;
+      this.visibleLines.to--;
+      this.visibleLines.offset = this.visibleLines.from * this.options.lineHeight;
+    }
+
+    if (this.visibleLines.to <= this.cursor.line) {
+      this.visibleLines.from++;
+      this.visibleLines.to = this.cursor.line + 1;
+      this.visibleLines.offset = this.visibleLines.from * this.options.lineHeight;
+    }
+
+    let lns = [...this.lines].slice(this.visibleLines.from, this.visibleLines.to);
+    // console.log(">>>> LOAD: ", this.totalLines, this.cursor.line, this.visibleLines, lns);
+
+    // TODO: selected line value is same as calculated cursor y value, maybe use that in future?? 
+    this.drawSelectedLine(this.cursor.line * this.options.lineHeight - this.visibleLines.offset);
+    lns.forEach((line, i) => {
       this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
     });
     this.drawCursor();
