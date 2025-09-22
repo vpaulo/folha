@@ -2,7 +2,10 @@ export class Cursor {
   #line = 0;
   #col = 0;
   width = 0;
+
   height = 0;
+  x = 0;
+  y = 0;
 
   constructor(editor, width, height) {
     this.editor = editor;
@@ -67,11 +70,9 @@ export class Cursor {
     const before = text.slice(0, this.#col);
     // const after = text.slice(this.#col);
 
-    const x =
+    this.x =
       (this.#col === 0 ? 0 : this.editor.ctx.measureText(before).width - this.width) >> 0;
-    const y = (this.#line * this.height) - this.editor.visibleLines.offset;
-    console.log(">>> Cursor moved: ", x, y);
-
-    return { x, y };
+    this.y = (this.#line * this.height) - this.editor.visibleLines.offset;
+    console.log(">>> Cursor moved: ", this.x, this.y, (this.editor.ctx.measureText(text.slice(this.editor.visibleColumns.from, this.#col - 1)).width - this.width) >> 0);
   }
 }

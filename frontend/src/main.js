@@ -38,8 +38,8 @@ qwerty uiop asd fgjkjhliuwqeq nmnv zcgbviu mdsjkfn sdkfhs dfsndfs difus fshdfisd
 
 // Setup the greet function
 // window.greet = function () {
-//   // Get name
 //   let name = nameElement.value;
+//   // Get name
 
 //   // Check if the input is empty
 //   if (name === "") return;
@@ -124,6 +124,7 @@ export class Editor {
 
     this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
     this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
+    this.visibleColumns = { from: 0, to: 0, offset: 0 }; // TODO: just using from, maybe rename this to indicate col to start rendering from
   }
 
   load(txt = "") {
@@ -133,6 +134,8 @@ export class Editor {
     }
     this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
     this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
+    this.visibleColumns = { from: 0, to: 0, offset: 0 };
+    this.selectedText = { from: { line: 0, col: 0 }, to: { line: 0, col: 0 } };
 
     this.render();
   }
@@ -145,6 +148,21 @@ export class Editor {
     this.ctx.textBaseline = "bottom";
     this.ctx.fillStyle = "#000000";
 
+    this.updateVisibleLines();
+    this.updateVisibleColumns();
+
+    const lns = [...this.lines].slice(this.visibleLines.from, this.visibleLines.to).map((l) => l.slice(this.visibleColumns.from));
+
+    console.log(">>>> LOAD: ", this.visibleLines, this.visibleColumns, lns[0]);
+
+    this.drawSelectedLine(this.cursor.y);
+    lns.forEach((line, i) => {
+      this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
+    });
+    this.drawCursor();
+  }
+
+  updateVisibleLines() {
     if (this.visibleLines.from > this.cursor.line) {
       this.visibleLines.from = this.cursor.line;
       this.visibleLines.to--;
@@ -156,21 +174,27 @@ export class Editor {
       this.visibleLines.to = this.cursor.line + 1;
       this.visibleLines.offset = this.visibleLines.from * this.options.lineHeight;
     }
+  }
 
-    let lns = [...this.lines].slice(this.visibleLines.from, this.visibleLines.to);
-    // console.log(">>>> LOAD: ", this.totalLines, this.cursor.line, this.visibleLines, lns);
+  updateVisibleColumns() {
+    this.cursor.position();
+    const charWidth = this.ctx.measureText("M").width >> 0;
+    const diff = this.cursor.x - this.canvas.width;
+    const offsetX = diff > 0 ? ((diff / charWidth) >> 0) + 1 : 0;
+    // TODO: calculation needs fixing in some situations the value is completely wrong
+    console.log(">>>> PORRA: ", diff, offsetX);
 
-    // TODO: selected line value is same as calculated cursor y value, maybe use that in future?? 
-    this.drawSelectedLine(this.cursor.line * this.options.lineHeight - this.visibleLines.offset);
-    lns.forEach((line, i) => {
-      this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
-    });
-    this.drawCursor();
+    if (this.visibleColumns.from < offsetX) {
+      this.visibleColumns.from = offsetX;
+    }
+
+    if (this.visibleColumns.from > offsetX && this.visibleColumns.from > this.cursor.col) {
+      this.visibleColumns.from--;
+    }
   }
 
   drawCursor() {
-    const { width, height } = this.cursor;
-    const { x, y } = this.cursor.position();
+    const { width, height, x, y } = this.cursor;
     this.ctx.save();
     this.ctx.fillStyle = "#000000";
     this.ctx.fillRect(x, y, width, height);
