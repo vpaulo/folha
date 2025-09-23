@@ -9,7 +9,7 @@ export class KeyPressMonitor {
 
   listen() {
     window.addEventListener("keydown", (e) => {
-      console.log(">>> keydown: ", e, this.editor.lines.length);
+      console.log(">>> keydown: ", e);
       switch (e.key) {
         case "ArrowLeft": // TODO: shift + arrow for text selection
           this.editor.cursor.colPrevious();
@@ -36,6 +36,8 @@ export class KeyPressMonitor {
             this.editor.cursor.line--;
             this.editor.cursor.col = before.length;
           }
+          // Re-wrap lines after deletion
+          this.editor.wrapLines();
           break;
         case "Delete":
           if (this.editor.lines[this.editor.cursor.line].length > this.editor.cursor.col) {
@@ -50,6 +52,8 @@ export class KeyPressMonitor {
             this.editor.lines.splice(this.editor.cursor.line + 1, 1); // remove line
             this.editor.lines[this.editor.cursor.line] += next; // append removed line contents
           }
+          // Re-wrap lines after deletion
+          this.editor.wrapLines();
           break;
         case "Enter":
           {
@@ -60,6 +64,8 @@ export class KeyPressMonitor {
             this.editor.lines.splice(this.editor.cursor.line + 1, 0, after); // new line
             this.editor.cursor.line++;
             this.editor.cursor.col = 0;
+            // Re-wrap lines after adding new line
+            this.editor.wrapLines();
           }
           break;
         case "Tab":
@@ -69,6 +75,8 @@ export class KeyPressMonitor {
         //   if (e.ctrlKey) {
         //     const selectedLine = lines[cursor.line];
         //     navigator.clipboard.writeText(selectedLine);
+        //   } else {
+        //     this.editor.insertChar(e.key);
         //   }
         //   break;
         case "v":
@@ -77,6 +85,8 @@ export class KeyPressMonitor {
               this.editor.insertChar(text);
               this.editor.render();
             });
+          } else {
+            this.editor.insertChar(e.key);
           }
           break;
         default:
@@ -86,7 +96,6 @@ export class KeyPressMonitor {
           break;
       }
       this.editor.render();
-      console.log(">>>> cursor: ", this.editor.cursor);
       e.preventDefault();
     });
   }

@@ -34,45 +34,79 @@ export class Cursor {
       this.col--;
     } else if (this.#col === 0 && this.#line > 0) {
       this.line--;
-      this.col = this.editor.lines[this.#line]?.length;
+      this.col = this.editor.lines[this.#line]?.length || 0;
     }
-    // this.position();
   }
 
   colNext() {
-    if (this.editor.lines[this.#line]?.length > this.#col) {
+    const currentLineLength = this.editor.lines[this.#line]?.length || 0;
+    if (currentLineLength > this.#col) {
       this.col++;
     } else if (this.editor.lines.length - 1 > this.#line) {
       this.line++;
       this.col = 0;
     }
-    // this.position();
   }
 
   linePrevious() {
-    if (this.#line > 0) {
-      this.line--;
-      this.col = this.editor.lines[this.#line]?.length < this.#col ? this.editor.lines[this.#line]?.length : this.#col;
-      // this.position();
+    // Convert current logical position to wrapped position
+    const wrappedPos = this.editor.logicalToWrappedPosition(this.#line, this.#col);
+
+    if (wrappedPos.wrappedLine > 0) {
+      const prevWrappedLine = wrappedPos.wrappedLine - 1;
+      const prevWrappedInfo = this.editor.wrappedToLineMap[prevWrappedLine];
+
+      // Try to maintain the same column position on the previous wrapped line
+      const targetCol = Math.min(wrappedPos.wrappedCol, this.editor.wrappedLines[prevWrappedLine].text.length);
+      const newLogicalPos = this.editor.wrappedToLogicalPosition(prevWrappedLine, targetCol);
+
+      this.line = newLogicalPos.logicalLine;
+      this.col = newLogicalPos.logicalCol;
     }
   }
 
   lineNext() {
-    if (this.editor.lines.length - 1 > this.#line) {
-      this.line++;
-      this.col = this.editor.lines[this.#line]?.length < this.#col ? this.editor.lines[this.#line]?.length : this.#col;
-      // this.position();
+    // Convert current logical position to wrapped position
+    const wrappedPos = this.editor.logicalToWrappedPosition(this.#line, this.#col);
+
+    if (wrappedPos.wrappedLine < this.editor.wrappedLines.length - 1) {
+      const nextWrappedLine = wrappedPos.wrappedLine + 1;
+
+      // Try to maintain the same column position on the next wrapped line
+      const targetCol = Math.min(wrappedPos.wrappedCol, this.editor.wrappedLines[nextWrappedLine].text.length);
+      const newLogicalPos = this.editor.wrappedToLogicalPosition(nextWrappedLine, targetCol);
+
+      this.line = newLogicalPos.logicalLine;
+      this.col = newLogicalPos.logicalCol;
     }
   }
 
   position() {
-    const text = this.editor.lines[this.#line];
-    const before = text.slice(0, this.#col);
-    // const after = text.slice(this.#col);
+    // Fallback to simple positioning if wrapped lines aren't ready
+    if (!this.editor.wrappedLines || this.editor.wrappedLines.length === 0) {
+      const text = this.editor.lines[this.#line] || "";
+      const before = text.slice(0, this.#col);
+      this.x = this.#col === 0 ? 0 : this.editor.ctx.measureText(before).width;
+      this.y = (this.#line * this.height) - (this.editor.visibleLines?.offset || 0);
+      return;
+    }
 
-    this.x =
-      (this.#col === 0 ? 0 : this.editor.ctx.measureText(before).width - this.width) >> 0;
-    this.y = (this.#line * this.height) - this.editor.visibleLines.offset;
-    console.log(">>> Cursor moved: ", this.x, this.y, (this.editor.ctx.measureText(text.slice(this.editor.visibleColumns.from, this.#col - 1)).width - this.width) >> 0);
+    // Convert logical position to wrapped position for rendering
+    const wrappedPos = this.editor.logicalToWrappedPosition(this.#line, this.#col);
+    const wrappedLineIndex = wrappedPos.wrappedLine;
+    const wrappedCol = wrappedPos.wrappedCol;
+
+    if (wrappedLineIndex < this.editor.wrappedLines.length) {
+      const wrappedLineText = this.editor.wrappedLines[wrappedLineIndex].text;
+      const beforeCursor = wrappedLineText.slice(0, wrappedCol);
+
+      this.x = wrappedCol === 0 ? 0 : this.editor.ctx.measureText(beforeCursor).width;
+      this.y = (wrappedLineIndex * this.height) - this.editor.visibleLines.offset;
+    } else {
+      this.x = 0;
+      this.y = 0;
+    }
+
+    console.log(">>> Cursor moved: ", this.x, this.y, "logical:", this.#line, this.#col, "wrapped:", wrappedLineIndex, wrappedCol);
   }
 }

@@ -79,6 +79,9 @@ export class Editor {
     // theme: 'dark',
   };
   lines = [];
+  wrappedLines = []; // Visual lines for display (includes wrapped portions)
+  lineToWrappedMap = []; // Maps logical line index to wrapped line ranges
+  wrappedToLineMap = []; // Maps wrapped line index to logical line index
 
   segLines = new Intl.Segmenter("en", { granularity: "sentence" });
   segWords = new Intl.Segmenter("en", { granularity: "word" });
@@ -101,6 +104,7 @@ export class Editor {
     this.observer = new ResizeObserver(() => {
       this.elRect = this.element.getBoundingClientRect();
       this.updateCanvasSize();
+      this.wrapLines(); // Re-wrap lines when window resizes
       this.render();
     });
     this.observer.observe(this.element);
@@ -122,9 +126,13 @@ export class Editor {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset any previous transform
     this.ctx.scale(this.dpi, this.dpi);
 
+    // Set font before calculating line width
+    this.ctx.font = `${this.options.fontSize}px monospace`;
+    this.ctx.letterSpacing = `${this.options.letterSpacing}px`;
+
     this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
+    this.maxLineWidth = this.elRect.width - 20; // Account for padding
     this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
-    this.visibleColumns = { from: 0, to: 0, offset: 0 }; // TODO: just using from, maybe rename this to indicate col to start rendering from
   }
 
   load(txt = "") {
@@ -132,64 +140,207 @@ export class Editor {
     if (this.lines.length === 0) {
       this.lines.push("");
     }
+
     this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
+    this.maxLineWidth = this.elRect.width - 20; // Account for padding
     this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
-    this.visibleColumns = { from: 0, to: 0, offset: 0 };
     this.selectedText = { from: { line: 0, col: 0 }, to: { line: 0, col: 0 } };
 
+    this.wrapLines();
     this.render();
+  }
+
+  wrapLines() {
+    this.wrappedLines = [];
+    this.lineToWrappedMap = [];
+    this.wrappedToLineMap = [];
+
+    this.lines.forEach((line, lineIndex) => {
+      const wrappedStartIndex = this.wrappedLines.length;
+      const wrappedPortions = this.wrapSingleLine(line);
+
+      this.lineToWrappedMap[lineIndex] = {
+        start: wrappedStartIndex,
+        end: wrappedStartIndex + wrappedPortions.length - 1,
+      };
+
+      wrappedPortions.forEach((portion, portionIndex) => {
+        this.wrappedLines.push({
+          text: portion,
+          logicalLine: lineIndex,
+          portionIndex: portionIndex,
+          totalPortions: wrappedPortions.length,
+        });
+        this.wrappedToLineMap.push({
+          logicalLine: lineIndex,
+          portionIndex: portionIndex,
+          charStart: this.getCharStartForPortion(line, wrappedPortions, portionIndex),
+          charEnd: this.getCharEndForPortion(line, wrappedPortions, portionIndex),
+        });
+      });
+    });
+  }
+
+  wrapSingleLine(line) {
+    if (!line || line.length === 0) return [""];
+
+    // Ensure font is set for accurate measurements
+    this.ctx.font = `${this.options.fontSize}px monospace`;
+    this.ctx.letterSpacing = `${this.options.letterSpacing}px`;
+
+    const charWidth = this.ctx.measureText("M").width;
+    const maxCharsPerLine = Math.max(10, Math.floor(this.maxLineWidth / charWidth));
+
+    console.log("Wrapping line:", line.length, "chars, max per line:", maxCharsPerLine, "width:", this.maxLineWidth);
+
+    if (line.length <= maxCharsPerLine) {
+      return [line];
+    }
+
+    const wrappedPortions = [];
+    let currentIndex = 0;
+
+    while (currentIndex < line.length) {
+      let endIndex = Math.min(currentIndex + maxCharsPerLine, line.length);
+
+      // Try to break at word boundaries if possible
+      if (endIndex < line.length) {
+        let breakPoint = endIndex;
+        for (let i = endIndex - 1; i > currentIndex; i--) {
+          if (line[i] === " " || line[i] === "\t") {
+            breakPoint = i;
+            break;
+          }
+        }
+        // If we found a good break point and it's not too far back, use it
+        if (breakPoint !== endIndex && endIndex - breakPoint < maxCharsPerLine * 0.3) {
+          endIndex = breakPoint;
+        }
+      }
+
+      const portion = line.slice(currentIndex, endIndex);
+      if (portion.length > 0) {
+        wrappedPortions.push(portion);
+      }
+      currentIndex = endIndex;
+
+      // Skip leading whitespace on continuation lines
+      while (currentIndex < line.length && line[currentIndex] === " ") {
+        currentIndex++;
+      }
+    }
+
+    console.log(
+      "Wrapped into",
+      wrappedPortions.length,
+      "portions:",
+      wrappedPortions.map((p) => p.length),
+    );
+    return wrappedPortions.length > 0 ? wrappedPortions : [""];
+  }
+
+  getCharStartForPortion(line, portions, portionIndex) {
+    // Simple approach: calculate based on cumulative lengths
+    let start = 0;
+    for (let i = 0; i < portionIndex; i++) {
+      start += portions[i].length;
+    }
+    return Math.min(start, line.length);
+  }
+
+  getCharEndForPortion(line, portions, portionIndex) {
+    const start = this.getCharStartForPortion(line, portions, portionIndex);
+    const end = start + portions[portionIndex].length;
+    return Math.min(end, line.length);
+  }
+
+  logicalToWrappedPosition(logicalLine, logicalCol) {
+    if (!this.lineToWrappedMap || logicalLine >= this.lineToWrappedMap.length) {
+      return { wrappedLine: Math.max(0, this.wrappedLines.length - 1), wrappedCol: 0 };
+    }
+
+    const wrappedRange = this.lineToWrappedMap[logicalLine];
+    if (!wrappedRange) {
+      return { wrappedLine: 0, wrappedCol: 0 };
+    }
+
+    for (let wrappedIndex = wrappedRange.start; wrappedIndex <= wrappedRange.end; wrappedIndex++) {
+      const wrappedInfo = this.wrappedToLineMap[wrappedIndex];
+      if (!wrappedInfo) continue;
+
+      if (logicalCol >= wrappedInfo.charStart && logicalCol <= wrappedInfo.charEnd) {
+        return {
+          wrappedLine: wrappedIndex,
+          wrappedCol: logicalCol - wrappedInfo.charStart,
+        };
+      }
+    }
+
+    // If not found, place at end of last wrapped line for this logical line
+    const lastWrappedIndex = wrappedRange.end;
+    const lastWrappedInfo = this.wrappedToLineMap[lastWrappedIndex];
+    if (!lastWrappedInfo) {
+      return { wrappedLine: lastWrappedIndex, wrappedCol: 0 };
+    }
+
+    return {
+      wrappedLine: lastWrappedIndex,
+      wrappedCol: Math.min(
+        logicalCol - lastWrappedInfo.charStart,
+        this.wrappedLines[lastWrappedIndex]?.text.length || 0,
+      ),
+    };
+  }
+
+  wrappedToLogicalPosition(wrappedLine, wrappedCol) {
+    if (wrappedLine >= this.wrappedToLineMap.length) {
+      return { logicalLine: this.lines.length - 1, logicalCol: this.lines[this.lines.length - 1].length };
+    }
+
+    const wrappedInfo = this.wrappedToLineMap[wrappedLine];
+    return {
+      logicalLine: wrappedInfo.logicalLine,
+      logicalCol: wrappedInfo.charStart + wrappedCol,
+    };
   }
 
   render() {
     this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     this.ctx.font = `${this.options.fontSize}px monospace`;
     this.ctx.letterSpacing = `${this.options.letterSpacing}px`;
-    // this.ctx.wordSpacing = `${this.options.wordSpacing}px`;
     this.ctx.textBaseline = "bottom";
     this.ctx.fillStyle = "#000000";
 
     this.updateVisibleLines();
-    this.updateVisibleColumns();
+    this.cursor.position();
 
-    const lns = [...this.lines].slice(this.visibleLines.from, this.visibleLines.to).map((l) => l.slice(this.visibleColumns.from));
-
-    console.log(">>>> LOAD: ", this.visibleLines, this.visibleColumns, lns[0]);
+    // Use wrapped lines for rendering
+    const wrappedLns = [...this.wrappedLines]
+      .slice(this.visibleLines.from, this.visibleLines.to)
+      .map((wrappedLine) => wrappedLine.text);
 
     this.drawSelectedLine(this.cursor.y);
-    lns.forEach((line, i) => {
+    wrappedLns.forEach((line, i) => {
       this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
     });
     this.drawCursor();
   }
 
   updateVisibleLines() {
-    if (this.visibleLines.from > this.cursor.line) {
-      this.visibleLines.from = this.cursor.line;
-      this.visibleLines.to--;
+    // Convert logical cursor position to wrapped line position
+    const wrappedPos = this.logicalToWrappedPosition(this.cursor.line, this.cursor.col);
+    const wrappedLine = wrappedPos.wrappedLine;
+
+    if (this.visibleLines.from > wrappedLine) {
+      this.visibleLines.from = wrappedLine;
+      this.visibleLines.to = Math.min(this.visibleLines.from + this.totalLines, this.wrappedLines.length);
       this.visibleLines.offset = this.visibleLines.from * this.options.lineHeight;
     }
 
-    if (this.visibleLines.to <= this.cursor.line) {
-      this.visibleLines.from++;
-      this.visibleLines.to = this.cursor.line + 1;
+    if (this.visibleLines.to <= wrappedLine) {
+      this.visibleLines.to = wrappedLine + 1;
+      this.visibleLines.from = Math.max(0, this.visibleLines.to - this.totalLines);
       this.visibleLines.offset = this.visibleLines.from * this.options.lineHeight;
-    }
-  }
-
-  updateVisibleColumns() {
-    this.cursor.position();
-    const charWidth = this.ctx.measureText("M").width >> 0;
-    const diff = this.cursor.x - this.canvas.width;
-    const offsetX = diff > 0 ? ((diff / charWidth) >> 0) + 1 : 0;
-    // TODO: calculation needs fixing in some situations the value is completely wrong
-    console.log(">>>> PORRA: ", diff, offsetX);
-
-    if (this.visibleColumns.from < offsetX) {
-      this.visibleColumns.from = offsetX;
-    }
-
-    if (this.visibleColumns.from > offsetX && this.visibleColumns.from > this.cursor.col) {
-      this.visibleColumns.from--;
     }
   }
 
@@ -226,5 +377,8 @@ export class Editor {
       this.lines[this.cursor.line] = before + ch + after;
       this.cursor.col += ch.length;
     }
+
+    // Re-wrap lines after text change
+    this.wrapLines();
   }
 }
