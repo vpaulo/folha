@@ -224,6 +224,20 @@ export class KeyPressMonitor {
             this.editor.insertChar(e.key);
           }
           break;
+        case "o":
+          if (e.ctrlKey) {
+            this.editor.openFile();
+          } else {
+            this.editor.insertChar(e.key);
+          }
+          break;
+        case "s":
+          if (e.ctrlKey) {
+            this.editor.saveFile();
+          } else {
+            this.editor.insertChar(e.key);
+          }
+          break;
         default:
           if (e.key.length < 2) {
             this.editor.insertChar(e.key);

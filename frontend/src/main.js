@@ -1,7 +1,7 @@
 import "./styles/style.css";
 import "./styles/app.css";
 
-import { Greet } from "../wailsjs/go/main/App";
+import { Greet, OpenFile, SaveFile, SaveToFile } from "../wailsjs/go/main/App";
 import { ClipboardGetText, EventsOn, LogInfo } from "../wailsjs/runtime/runtime";
 
 import { KeyPressMonitor } from "./monitors/keyPress";
@@ -580,7 +580,7 @@ export class Editor {
     if (newLines.length > 1) {
       const last = (newLines.at(-1) ?? "") + after;
 
-      this.lines = [...this.segLines.segment(this.lines.join("\n"))].map((l) => l.segment.replaceAll("\n", ""));
+      this.lines = [...this.segLines.segment(this.getText())].map((l) => l.segment.replaceAll("\n", ""));
 
       this.cursor.line += newLines.length - 1;
       this.cursor.col = last.length - after.length;
@@ -590,5 +590,38 @@ export class Editor {
 
     // Re-wrap lines after text change
     this.wrapLines();
+  }
+
+  async openFile() {
+    try {
+      const content = await OpenFile();
+      if (content !== null && content !== "") {
+        this.load(content);
+      }
+    } catch (error) {
+      console.error("Error opening file:", error);
+    }
+  }
+
+  async saveFile() {
+    try {
+      const content = this.getText();
+      await SaveFile(content);
+    } catch (error) {
+      console.error("Error saving file:", error);
+    }
+  }
+
+  async saveToFile(filePath) {
+    try {
+      const content = this.getText();
+      await SaveToFile(filePath, content);
+    } catch (error) {
+      console.error("Error saving to file:", error);
+    }
+  }
+
+  getText() {
+    return this.lines.join("\n");
   }
 }

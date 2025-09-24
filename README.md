@@ -29,6 +29,8 @@ A modern, canvas-based text editor built with Wails, Go, and vanilla JavaScript.
 - **Ctrl + C**: Copy selected text to clipboard
 - **Ctrl + X**: Cut selected text to clipboard
 - **Ctrl + V**: Paste text from clipboard
+- **Ctrl + O**: Opens file dialog to load file
+- **Ctrl + S**: Opens save dialog to save current content
 - **Shift + Arrows**: Extend text selection
 - **Backspace/Delete**: Remove characters or selected text
 - **Enter**: Create new lines
