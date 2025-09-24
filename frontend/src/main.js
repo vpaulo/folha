@@ -144,7 +144,12 @@ export class Editor {
     this.totalLines = (this.canvas.height / this.options.lineHeight) >> 0;
     this.maxLineWidth = this.elRect.width - 20; // Account for padding
     this.visibleLines = { from: 0, to: this.totalLines, offset: 0 };
-    this.selectedText = { from: { line: 0, col: 0 }, to: { line: 0, col: 0 } };
+    this.selection = {
+      isActive: false,
+      start: { line: 0, col: 0 }, // Selection start position (logical coordinates)
+      end: { line: 0, col: 0 }, // Selection end position (logical coordinates)
+      anchor: { line: 0, col: 0 }, // Initial selection point (doesn't move during selection)
+    };
 
     this.wrapLines();
     this.render();
@@ -191,7 +196,7 @@ export class Editor {
     const charWidth = this.ctx.measureText("M").width;
     const maxCharsPerLine = Math.max(10, Math.floor(this.maxLineWidth / charWidth));
 
-    console.log("Wrapping line:", line.length, "chars, max per line:", maxCharsPerLine, "width:", this.maxLineWidth);
+    // console.log("Wrapping line:", line.length, "chars, max per line:", maxCharsPerLine, "width:", this.maxLineWidth);
 
     if (line.length <= maxCharsPerLine) {
       return [line];
@@ -230,12 +235,12 @@ export class Editor {
       }
     }
 
-    console.log(
-      "Wrapped into",
-      wrappedPortions.length,
-      "portions:",
-      wrappedPortions.map((p) => p.length),
-    );
+    // console.log(
+    //   "Wrapped into",
+    //   wrappedPortions.length,
+    //   "portions:",
+    //   wrappedPortions.map((p) => p.length),
+    // );
     return wrappedPortions.length > 0 ? wrappedPortions : [""];
   }
 
@@ -320,6 +325,7 @@ export class Editor {
       .map((wrappedLine) => wrappedLine.text);
 
     this.drawSelectedLine(this.cursor.y);
+    this.drawSelection(); // Draw selection before text
     wrappedLns.forEach((line, i) => {
       this.ctx.fillText(line, 0, this.options.lineHeight * (i + 1));
     });
@@ -360,21 +366,225 @@ export class Editor {
     this.ctx.restore();
   }
 
+  drawSelection() {
+    if (!this.hasSelection()) return;
+
+    this.ctx.save();
+    this.ctx.fillStyle = "#3390ff"; // Selection highlight color
+    this.ctx.globalAlpha = 0.3;
+
+    const start = this.selection.start;
+    const end = this.selection.end;
+
+    // Convert logical positions to wrapped positions for rendering
+    const startWrapped = this.logicalToWrappedPosition(start.line, start.col);
+    const endWrapped = this.logicalToWrappedPosition(end.line, end.col);
+
+    if (startWrapped.wrappedLine === endWrapped.wrappedLine) {
+      // Single wrapped line selection
+      this.drawSingleLineSelection(startWrapped, endWrapped);
+    } else {
+      // Multi-line selection
+      this.drawMultiLineSelection(startWrapped, endWrapped);
+    }
+
+    this.ctx.restore();
+  }
+
+  drawSingleLineSelection(startWrapped, endWrapped) {
+    const wrappedLineIndex = startWrapped.wrappedLine;
+
+    // Check if this wrapped line is visible
+    if (wrappedLineIndex < this.visibleLines.from || wrappedLineIndex >= this.visibleLines.to) {
+      return;
+    }
+
+    const visibleLineIndex = wrappedLineIndex - this.visibleLines.from;
+    const y = visibleLineIndex * this.options.lineHeight;
+
+    const wrappedLine = this.wrappedLines[wrappedLineIndex];
+    if (!wrappedLine) return;
+
+    const beforeSelection = wrappedLine.text.slice(0, startWrapped.wrappedCol);
+    const selectedText = wrappedLine.text.slice(startWrapped.wrappedCol, endWrapped.wrappedCol);
+
+    const startX = beforeSelection.length > 0 ? this.ctx.measureText(beforeSelection).width : 0;
+    const selectionWidth = selectedText.length > 0 ? this.ctx.measureText(selectedText).width : 0;
+
+    this.ctx.fillRect(startX, y, selectionWidth, this.options.lineHeight);
+  }
+
+  drawMultiLineSelection(startWrapped, endWrapped) {
+    for (
+      let wrappedLineIndex = startWrapped.wrappedLine;
+      wrappedLineIndex <= endWrapped.wrappedLine;
+      wrappedLineIndex++
+    ) {
+      // Check if this wrapped line is visible
+      if (wrappedLineIndex < this.visibleLines.from || wrappedLineIndex >= this.visibleLines.to) {
+        continue;
+      }
+
+      const visibleLineIndex = wrappedLineIndex - this.visibleLines.from;
+      const y = visibleLineIndex * this.options.lineHeight;
+
+      const wrappedLine = this.wrappedLines[wrappedLineIndex];
+      if (!wrappedLine) continue;
+
+      let startX = 0;
+      let width = 0;
+
+      if (wrappedLineIndex === startWrapped.wrappedLine) {
+        // First line of selection
+        const beforeSelection = wrappedLine.text.slice(0, startWrapped.wrappedCol);
+        const selectedText = wrappedLine.text.slice(startWrapped.wrappedCol);
+
+        startX = beforeSelection.length > 0 ? this.ctx.measureText(beforeSelection).width : 0;
+        width = selectedText.length > 0 ? this.ctx.measureText(selectedText).width : 0;
+      } else if (wrappedLineIndex === endWrapped.wrappedLine) {
+        // Last line of selection
+        const selectedText = wrappedLine.text.slice(0, endWrapped.wrappedCol);
+
+        startX = 0;
+        width = selectedText.length > 0 ? this.ctx.measureText(selectedText).width : 0;
+      } else {
+        // Middle lines - select entire line
+        startX = 0;
+        width = wrappedLine.text.length > 0 ? this.ctx.measureText(wrappedLine.text).width : 0;
+      }
+
+      this.ctx.fillRect(startX, y, width, this.options.lineHeight);
+    }
+  }
+
+  // Selection utility methods
+  startSelection(line = this.cursor.line, col = this.cursor.col) {
+    this.selection.isActive = true;
+    this.selection.anchor = { line, col };
+    this.selection.start = { line, col };
+    this.selection.end = { line, col };
+  }
+
+  updateSelection(line = this.cursor.line, col = this.cursor.col) {
+    if (!this.selection.isActive) return;
+
+    const anchor = this.selection.anchor;
+    const current = { line, col };
+
+    // Determine start and end based on anchor and current position
+    if (this.comparePositions(anchor, current) <= 0) {
+      this.selection.start = { ...anchor };
+      this.selection.end = { ...current };
+    } else {
+      this.selection.start = { ...current };
+      this.selection.end = { ...anchor };
+    }
+  }
+
+  endSelection() {
+    // Keep selection if there's actually something selected
+    if (!this.hasSelection()) {
+      this.clearSelection();
+    }
+  }
+
+  clearSelection() {
+    this.selection.isActive = false;
+    this.selection.start = { line: 0, col: 0 };
+    this.selection.end = { line: 0, col: 0 };
+    this.selection.anchor = { line: 0, col: 0 };
+  }
+
+  hasSelection() {
+    return this.selection.isActive && this.comparePositions(this.selection.start, this.selection.end) !== 0;
+  }
+
+  comparePositions(pos1, pos2) {
+    if (pos1.line !== pos2.line) {
+      return pos1.line - pos2.line;
+    }
+    return pos1.col - pos2.col;
+  }
+
+  getSelectedText() {
+    if (!this.hasSelection()) return "";
+
+    const start = this.selection.start;
+    const end = this.selection.end;
+
+    if (start.line === end.line) {
+      // Single line selection
+      return this.lines[start.line].slice(start.col, end.col);
+    } else {
+      // Multi-line selection
+      let text = "";
+      for (let lineIndex = start.line; lineIndex <= end.line; lineIndex++) {
+        const line = this.lines[lineIndex];
+
+        if (lineIndex === start.line) {
+          text += line.slice(start.col);
+        } else if (lineIndex === end.line) {
+          text += line.slice(0, end.col);
+        } else {
+          text += line;
+        }
+        if (lineIndex < end.line) {
+          text += "\n";
+        }
+      }
+      return text;
+    }
+  }
+
+  deleteSelection() {
+    if (!this.hasSelection()) return;
+
+    const start = this.selection.start;
+    const end = this.selection.end;
+
+    if (start.line === end.line) {
+      // Single line deletion
+      const line = this.lines[start.line];
+      this.lines[start.line] = line.slice(0, start.col) + line.slice(end.col);
+    } else {
+      // Multi-line deletion
+      const firstLine = this.lines[start.line].slice(0, start.col);
+      const lastLine = this.lines[end.line].slice(end.col);
+
+      // Remove the lines in between
+      this.lines.splice(start.line, end.line - start.line + 1, firstLine + lastLine);
+    }
+
+    // Move cursor to selection start
+    this.cursor.line = start.line;
+    this.cursor.col = start.col;
+
+    this.clearSelection();
+    this.wrapLines();
+  }
+
   insertChar(ch) {
+    // Delete selected text first if there's a selection
+    if (this.hasSelection()) {
+      this.deleteSelection();
+    }
+
     const line = this.lines[this.cursor.line];
     const before = line.slice(0, this.cursor.col);
     const after = line.slice(this.cursor.col);
     // Normalise inserted characters
-    const newLines = [...this.segLines.segment(ch)].map((l) => l.segment.replaceAll("\n", ""));
+    const newLines = [...this.segLines.segment(ch)].map((l) => l.segment);
+
+    this.lines[this.cursor.line] = before + ch + after;
 
     if (newLines.length > 1) {
       const last = (newLines.at(-1) ?? "") + after;
-      newLines[newLines.length - 1] = last;
-      this.lines.splice(this.cursor.line, 0, ...newLines);
+
+      this.lines = [...this.segLines.segment(this.lines.join("\n"))].map((l) => l.segment.replaceAll("\n", ""));
+
       this.cursor.line += newLines.length - 1;
       this.cursor.col = last.length - after.length;
     } else {
-      this.lines[this.cursor.line] = before + ch + after;
       this.cursor.col += ch.length;
     }
 

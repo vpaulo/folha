@@ -87,7 +87,7 @@ export class Cursor {
       const text = this.editor.lines[this.#line] || "";
       const before = text.slice(0, this.#col);
       this.x = this.#col === 0 ? 0 : this.editor.ctx.measureText(before).width;
-      this.y = (this.#line * this.height) - (this.editor.visibleLines?.offset || 0);
+      this.y = this.#line * this.height - (this.editor.visibleLines?.offset || 0);
       return;
     }
 
@@ -101,12 +101,22 @@ export class Cursor {
       const beforeCursor = wrappedLineText.slice(0, wrappedCol);
 
       this.x = wrappedCol === 0 ? 0 : this.editor.ctx.measureText(beforeCursor).width;
-      this.y = (wrappedLineIndex * this.height) - this.editor.visibleLines.offset;
+      this.y = wrappedLineIndex * this.height - this.editor.visibleLines.offset;
     } else {
       this.x = 0;
       this.y = 0;
     }
 
-    console.log(">>> Cursor moved: ", this.x, this.y, "logical:", this.#line, this.#col, "wrapped:", wrappedLineIndex, wrappedCol);
+    // console.log(
+    //   ">>> Cursor moved: ",
+    //   this.x,
+    //   this.y,
+    //   "logical:",
+    //   this.#line,
+    //   this.#col,
+    //   "wrapped:",
+    //   wrappedLineIndex,
+    //   wrappedCol,
+    // );
   }
 }
