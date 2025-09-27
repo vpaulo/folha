@@ -54,7 +54,6 @@ export class Cursor {
 
     if (wrappedPos.wrappedLine > 0) {
       const prevWrappedLine = wrappedPos.wrappedLine - 1;
-      const prevWrappedInfo = this.editor.wrappedToLineMap[prevWrappedLine];
 
       // Try to maintain the same column position on the previous wrapped line
       const targetCol = Math.min(wrappedPos.wrappedCol, this.editor.wrappedLines[prevWrappedLine].text.length);
@@ -106,17 +105,5 @@ export class Cursor {
       this.x = 0;
       this.y = 0;
     }
-
-    // console.log(
-    //   ">>> Cursor moved: ",
-    //   this.x,
-    //   this.y,
-    //   "logical:",
-    //   this.#line,
-    //   this.#col,
-    //   "wrapped:",
-    //   wrappedLineIndex,
-    //   wrappedCol,
-    // );
   }
 }

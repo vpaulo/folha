@@ -11,53 +11,7 @@ import { Cursor } from "./cursor/cursor";
 window.addEventListener("load", (event) => {
   LogInfo(">> LOADED: ");
   const app = new Editor(document.querySelector("#app"));
-  app.load(`;(function(root) {
-    'use strict';
-    qwerty uiop asd fgjkjhliuwqeq nmnv zcgbviu mdsjkfn sdkfhs dfsndfs difus fshdfisduf sifs fnjsdnfsidfu sifs dnfjsndfsiduf sdfjsndf sidfhj sfnsdifhjsdifhsdihf 👉
-
-    var KeyDownMonitor = function() {
-        this.keysDown = {};
-        var that = this;
-        window.addEventListener('keydown', function(e) {
-            that.keysDown[e.which || e.keyCode] = true;
-        });
-
-        window.addEventListener('keyup', function(e) {
-            that.keysDown[e.which || e.keyCode] = false;
-        });
-    };
-
-    KeyDownMonitor.prototype.isKeyDown = function(code) {
-        return this.keysDown[code];
-    };
-
-    root.KeyDownMonitor = KeyDownMonitor;
-}(window));
-qwerty uiop asd fgjkjhliuwqeq nmnv zcgbviu mdsjkfn sdkfhs dfsndfs difus fshdfisduf sifs fnjsdnfsidfu sifs dnfjsndfsiduf sdfjsndf sidfhj sfnsdifhjsdifhsdihf 👉`);
 });
-
-// Setup the greet function
-// window.greet = function () {
-//   let name = nameElement.value;
-//   // Get name
-
-//   // Check if the input is empty
-//   if (name === "") return;
-
-//   // Call App.Greet(name)
-//   try {
-//     Greet(name)
-//       .then((result) => {
-//         // Update result with data back from App.Greet()
-//         resultElement.innerText = result;
-//       })
-//       .catch((err) => {
-//         console.error(err);
-//       });
-//   } catch (err) {
-//     console.error(err);
-//   }
-// };
 
 export class Editor {
   canvas;
@@ -108,6 +62,12 @@ export class Editor {
       this.render();
     });
     this.observer.observe(this.element);
+
+    EventsOn("open_file", (content) => {
+      if (content !== null && content !== "") {
+        this.load(content);
+      }
+    });
 
     this.cursor = new Cursor(this, this.options.letterSpacing, this.options.lineHeight);
     new KeyPressMonitor(this);
@@ -196,8 +156,6 @@ export class Editor {
     const charWidth = this.ctx.measureText("M").width;
     const maxCharsPerLine = Math.max(10, Math.floor(this.maxLineWidth / charWidth));
 
-    // console.log("Wrapping line:", line.length, "chars, max per line:", maxCharsPerLine, "width:", this.maxLineWidth);
-
     if (line.length <= maxCharsPerLine) {
       return [line];
     }
@@ -235,12 +193,6 @@ export class Editor {
       }
     }
 
-    // console.log(
-    //   "Wrapped into",
-    //   wrappedPortions.length,
-    //   "portions:",
-    //   wrappedPortions.map((p) => p.length),
-    // );
     return wrappedPortions.length > 0 ? wrappedPortions : [""];
   }
 
@@ -592,16 +544,17 @@ export class Editor {
     this.wrapLines();
   }
 
-  async openFile() {
-    try {
-      const content = await OpenFile();
-      if (content !== null && content !== "") {
-        this.load(content);
-      }
-    } catch (error) {
-      console.error("Error opening file:", error);
-    }
-  }
+  // TIP: with the app menu this is not necessary anymore
+  // async openFile() {
+  //   try {
+  //     const content = await OpenFile();
+  //     if (content !== null && content !== "") {
+  //       this.load(content);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error opening file:", error);
+  //   }
+  // }
 
   async saveFile() {
     try {

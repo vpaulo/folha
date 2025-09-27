@@ -49,7 +49,6 @@ export class KeyPressMonitor {
     });
 
     window.addEventListener("keydown", (e) => {
-      console.log(">>> keydown: ", e);
       switch (e.key) {
         case "ArrowLeft":
           if (e.shiftKey) {
@@ -225,11 +224,11 @@ export class KeyPressMonitor {
           }
           break;
         case "o":
-          if (e.ctrlKey) {
-            this.editor.openFile();
-          } else {
-            this.editor.insertChar(e.key);
-          }
+          // if (e.ctrlKey) {
+          // this.editor.openFile();
+          // } else {
+          this.editor.insertChar(e.key);
+          // }
           break;
         case "s":
           if (e.ctrlKey) {
@@ -267,7 +266,6 @@ export class KeyPressMonitor {
 
     // Find the column position by measuring text width
     let col = 0;
-    let currentWidth = 0;
     const text = wrappedLine.text;
 
     for (let i = 0; i <= text.length; i++) {

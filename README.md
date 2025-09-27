@@ -115,6 +115,6 @@ This dual-coordinate system ensures accurate cursor placement and text selection
 - Multiple cursors
 - Find and replace
 - Undo/redo system
-- File operations (open, save)
+- File operations (open, save) [x]
 - Themes and customization
 - Plugin system

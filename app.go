@@ -52,7 +52,11 @@ func (a *App) ApplicationMenu() *menu.Menu {
 	// }
 	FileMenu := appMenu.AddSubmenu("File")
 	FileMenu.AddText("Open", keys.CmdOrCtrl("o"), func(_ *menu.CallbackData) {
-		a.OpenFile()
+		content, err := a.OpenFile()
+
+		if err == nil {
+			rt.EventsEmit(a.ctx, "open_file", content)
+		}
 	})
 	// FileMenu.AddText("Save File", keys.CmdOrCtrl("s"), func(_ *menu.CallbackData) {
 	// 	a.SaveFile("")
